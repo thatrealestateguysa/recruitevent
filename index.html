@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recruit 101 — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">KW</div>
+        <div>
+          <h1>Recruit 101</h1>
+          <p class="subtitle"><span id="version">v4.0</span> • filters, hard sync</p>
+        </div>
+      </div>
+      <nav class="actions">
+        <div class="badge" id="totalBadge">Total 0</div>
+        <div class="badge" id="filteredBadge">Filtered 0</div>
+        <button id="btnRefresh" class="btn">Refresh</button>
+      </nav>
+    </header>
+
+    <section class="api-pill-wrap">
+      <button id="apiUrl" class="api-pill" title="Click to copy API URL"></button>
+      <span id="syncInfo" class="muted small">Last sync: —</span>
+    </section>
+
+    <section class="status-tabs" id="statusTabs"></section>
+
+    <section class="toolbar">
+      <div class="group">
+        <label>Status (dropdown)</label>
+        <select id="statusFilter"></select>
+      </div>
+      <div class="group">
+        <label>Search (Name/Agency/Cell)</label>
+        <input id="searchInput" placeholder="Type to filter… (e.g. Ndlovu or Explore)" />
+      </div>
+      <div class="group">
+        <label>Rows / page</label>
+        <select id="pageSize">
+          <option value="10">10</option>
+          <option value="15" selected>15</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <div class="group right">
+        <button id="bulkSelectAll" class="btn btn-secondary">Select page</button>
+        <select id="bulkStatusSelect"></select>
+        <button id="bulkApply" class="btn">Bulk set status</button>
+      </div>
+    </section>
+
+    <main>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="checkAll" /></th>
+              <th>#</th>
+              <th>Name</th>
+              <th>Surname</th>
+              <th>Cell</th>
+              <th>Agency</th>
+              <th>Status</th>
+              <th>Note</th>
+              <th>WhatsApp</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="9" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prevPage" class="btn btn-secondary">Prev</button>
+        <span id="pageInfo" class="muted">Page 1/1</span>
+        <button id="nextPage" class="btn btn-secondary">Next</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
