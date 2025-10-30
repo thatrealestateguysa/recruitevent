@@ -1,12 +1,12 @@
 
 :root {
-  --bg: #111827; /* grey-900 */
-  --surface: #1f2937; /* grey-800 */
-  --text: #ffffff;
-  --muted: #9ca3af;
-  --accent: #60a5fa;
+  --bg: #1a1a1a;
+  --surface: #262626;
+  --text: #f5f5f5;
+  --muted: #b3b3b3;
+  --accent: #e5e5e5; /* neutral grey accent */
   --border: rgba(255,255,255,0.08);
-  --radius: 16px;
+  --radius: 14px;
 }
 
 * { box-sizing: border-box; }
@@ -14,10 +14,10 @@ html, body { height: 100%; margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.45 "Inter", system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", Helvetica, Arial;
+  font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", Helvetica, Arial;
 }
 
-/* Tabs always visible (wrap instead of slide) */
+/* Tabs always visible, wrap lines (no slide) */
 .tabs {
   position: sticky;
   top: 0;
@@ -32,15 +32,13 @@ body {
 .tab {
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.06);
+  background: #333;
   color: var(--text);
-  text-decoration: none;
   white-space: nowrap;
 }
 .tab.active { background: var(--accent); color: #000; font-weight: 700; }
 
 .wrap { max-width: 1200px; margin: 16px auto; padding: 0 12px; }
-
 .card {
   background: var(--surface);
   border-radius: var(--radius);
@@ -50,9 +48,9 @@ body {
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
 .toolbar input, .toolbar select {
-  background: #0b1220;
+  background: #121212;
   color: var(--text);
-  border: 1px solid #334155;
+  border: 1px solid #3d3d3d;
   border-radius: 10px;
   padding: 8px 10px;
 }
@@ -73,21 +71,21 @@ tbody td {
 tbody tr:hover { background: rgba(255,255,255,0.03); }
 
 .status-select, .date-input {
-  background: #0b1220;
+  background: #121212;
   color: var(--text);
-  border: 1px solid #334155;
+  border: 1px solid #3d3d3d;
   border-radius: 8px;
   padding: 6px 8px;
 }
 .btn {
   appearance: none;
-  border: none;
+  border: 1px solid #3d3d3d;
+  background: var(--accent);
+  color: #000;
   cursor: pointer;
   border-radius: 10px;
   padding: 8px 12px;
   font-weight: 700;
-  background: var(--accent);
-  color: #000;
 }
 .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
 .msg { font-size: 13px; color: var(--muted); }
