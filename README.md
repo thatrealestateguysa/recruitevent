@@ -1,18 +1,13 @@
-# Recruit 101 — Frontend v4.0
 
-**Endpoint configured**
+# Recruit 101 — Frontend (wired to GAS URL)
+
+**BASE_URL**
 ```
-https://script.google.com/macros/s/AKfycby1BllzYaw9v8hCZ8ycqrEFNhut9x2ag9kQovm5SRIw9WOo3ldXXFMEWEzhKvuHW6hd/exec
+https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec
 ```
 
-**Features**
-- Top status tabs (All + each status) with live counts
-- Clicking a tab filters server-side (`?status=...`)
-- Search, pagination, bulk set status
-- Inline status & note updates (round-trip to backend, then hard re-sync)
-- No-cache + cache-busting on all requests
-- Desktop-friendly WhatsApp open behavior
+The frontend uses REST-style GET endpoints:
+- `GET https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec?action=getDashboardData` → returns JSON payload with stats + contacts.
+- `GET https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec?action=updateContactStatus&rowNumber=R&newStatus=...&newNotes=...` → updates a row, returns `{success:true}`.
 
-**Deploy**
-- Upload these files to a web host (e.g., GitHub Pages).
-- If you ever change your Apps Script URL, edit `config.js`.
+This avoids CORS preflights and works from any static host (GitHub Pages, Netlify, Vercel, etc.).

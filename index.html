@@ -1,93 +1,66 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Recruit 101 — Dashboard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recruit 101 Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="page">
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo">KW</div>
-        <div>
-          <h1>Recruit 101</h1>
-          <p class="subtitle"><span id="version">v4.0</span> • filters, hard sync</p>
-        </div>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <div class="logo">
+        <img src="assets/logo.png" alt="KW Explore">
+        <div class="title">Recruit 101 — Dashboard</div>
       </div>
-      <nav class="actions">
-        <div class="badge" id="totalBadge">Total 0</div>
-        <div class="badge" id="filteredBadge">Filtered 0</div>
-        <button id="btnRefresh" class="btn">Refresh</button>
-      </nav>
-    </header>
+      <div class="spacer"></div>
+      <div class="pill" id="syncState">Syncing…</div>
+    </div>
+  </header>
 
-    <section class="api-pill-wrap">
-      <button id="apiUrl" class="api-pill" title="Click to copy API URL"></button>
-      <span id="syncInfo" class="muted small">Last sync: —</span>
-    </section>
+  <main class="wrap">
+    <!-- Status Tabs -->
+    <div id="tabs" class="tabs"></div>
 
-    <section class="status-tabs" id="statusTabs"></section>
-
+    <!-- Toolbar -->
     <section class="toolbar">
-      <div class="group">
-        <label>Status (dropdown)</label>
-        <select id="statusFilter"></select>
-      </div>
-      <div class="group">
-        <label>Search (Name/Agency/Cell)</label>
-        <input id="searchInput" placeholder="Type to filter… (e.g. Ndlovu or Explore)" />
-      </div>
-      <div class="group">
-        <label>Rows / page</label>
-        <select id="pageSize">
-          <option value="10">10</option>
-          <option value="15" selected>15</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
+      <div class="field">🔎 <input id="q" type="text" placeholder="Search name, agency, phone, notes…"/></div>
+      <div class="field">🏷️
+        <select id="statusFilter">
+          <option value="">All Statuses</option>
         </select>
       </div>
-      <div class="group right">
-        <button id="bulkSelectAll" class="btn btn-secondary">Select page</button>
-        <select id="bulkStatusSelect"></select>
-        <button id="bulkApply" class="btn">Bulk set status</button>
-      </div>
+      <button class="btn ghost" id="refreshBtn">Refresh</button>
+      <span class="muted" id="lastUpdated"></span>
     </section>
 
-    <main>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="checkAll" /></th>
-              <th>#</th>
-              <th>Name</th>
-              <th>Surname</th>
-              <th>Cell</th>
-              <th>Agency</th>
-              <th>Status</th>
-              <th>Note</th>
-              <th>WhatsApp</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="9" class="muted">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <button id="prevPage" class="btn btn-secondary">Prev</button>
-        <span id="pageInfo" class="muted">Page 1/1</span>
-        <button id="nextPage" class="btn btn-secondary">Next</button>
-      </div>
-    </main>
-  </div>
+    <!-- Stats -->
+    <section class="stats" id="stats"></section>
 
-  <script src="./config.js"></script>
-  <script src="./app.js"></script>
+    <!-- Table -->
+    <section class="table">
+      <table>
+        <thead>
+          <tr>
+            <th class="nowrap">Name</th>
+            <th>Agency</th>
+            <th>Status</th>
+            <th>Notes</th>
+            <th class="nowrap">Last Contact</th>
+            <th class="nowrap">WhatsApp</th>
+            <th class="nowrap">Save</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7">
+            <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div> <span>Loading contacts…</span></div>
+          </td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <div class="toast" id="toast">Saved</div>
+  <script src="app.js"></script>
 </body>
 </html>
