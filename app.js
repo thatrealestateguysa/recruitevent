@@ -1,14 +1,13 @@
 
-/* Recruit 101 — Dark Frontend (tabs + desktop WA + resilient sync) */
-const BASE_URL = "https://script.google.com/macros/s/AKfycbw2w6oTqx8m2OB9qeHmNLy2C2JSdP3B3SGVDJvsLQaCI8RoQfL9qKIW2Kcu88lf2gI1OQ/exec";
-
+/* Recruit 101 — Dark Frontend (wired) */
+const BASE_URL = "https://script.google.com/macros/s/AKfycbyEDhKW4L12FJaRA9bIxfQC33mToHV2vOpvkCQO2hQP6ezbeqHRKZwlJMt9gMBq5ncTlA/exec";
 let ALL = { stats: {}, contacts: [], statusOptions: [] };
 let FILTER = { q:'', status:'' };
-let REFRESH_TIMER = null;
 
 const $ = (q, all=false) => all ? Array.from(document.querySelectorAll(q)) : document.querySelector(q);
 const nowFmt = () => new Date().toLocaleString('en-ZA');
 const fmt = n => Intl.NumberFormat('en-ZA').format(n);
+const cacheBust = () => '&t=' + Date.now();
 
 function toast(msg, color){ const t=$('#toast'); t.textContent=msg||'Saved'; t.style.background=color||'var(--success)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1400); }
 function setSyncState(text){ $('#syncState').textContent = text; }
@@ -42,9 +41,7 @@ function renderTable(){
   tbody.innerHTML = rows.map(c => `
     <tr data-row="${c.rowNumber}">
       <td>${esc(c.messageType||'')}</td>
-      <td>
-        <select class="status">${optionize(ALL.statusOptions, c.status)}</select>
-      </td>
+      <td><select class="status">${optionize(ALL.statusOptions, c.status)}</select></td>
       <td class="nowrap">${renderWaButtons(c)}</td>
       <td class="nowrap"><strong>${esc(c.name||'')}</strong></td>
       <td class="nowrap">${esc(c.surname||'')}</td>
@@ -73,15 +70,15 @@ function renderWaButtons(c){
 function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]); }
 function optionize(list, selected){ return (list||[]).map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join(''); }
 
-/* REST I/O */
+/* REST I/O with cache-buster */
 async function refreshData(){
   setSyncState('Syncing…');
   try {
-    const res = await fetch(BASE_URL + '?action=getDashboardData', { method:'GET', cache:'no-store' });
+    const res = await fetch(BASE_URL + '?action=getDashboardData' + cacheBust(), { method:'GET', cache:'no-store' });
     const payload = await res.json();
     ALL = payload || { stats: {}, contacts: [], statusOptions: [] };
     render();
-    $('#lastUpdated').textContent = 'Updated ' + nowFmt();
+    const lu = document.getElementById('lastUpdated'); if(lu) lu.textContent = 'Updated ' + nowFmt();
     setSyncState('Up to date');
   } catch(err) {
     console.error(err); setSyncState('Sync failed'); toast('Sync failed','var(--error)');
@@ -94,24 +91,34 @@ async function saveRow(rowNumber, btn){
   const newStatus = tr.querySelector('select.status').value;
   const newNotes  = tr.querySelector('textarea.notes').value;
 
+  // Optimistic: update local data to prevent bounce-back before refresh
+  const item = (ALL.contacts||[]).find(x => x.rowNumber === rowNumber);
+  if(item) item.status = newStatus;
+
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    const url = BASE_URL + '?action=updateContactStatus&rowNumber=' + encodeURIComponent(rowNumber) +
-                '&newStatus=' + encodeURIComponent(newStatus) +
-                '&newNotes=' + encodeURIComponent(newNotes);
+    const url = BASE_URL + '?action=updateContactStatus' + cacheBust()
+      + '&rowNumber=' + encodeURIComponent(rowNumber)
+      + '&newStatus=' + encodeURIComponent(newStatus)
+      + '&newNotes=' + encodeURIComponent(newNotes);
     const res = await fetch(url, { method:'GET' });
     const data = await res.json();
     btn.disabled = false; btn.textContent = 'Save';
-    if(data && data.success){ toast('Saved'); refreshData(); } else { toast(data && data.message ? data.message : 'Save failed', 'var(--error)'); }
+    if(data && data.success){
+      if (item && data.savedStatus) item.status = data.savedStatus; // lock with server echo
+      toast('Saved');
+      refreshData();
+    } else {
+      toast(data && data.message ? data.message : 'Save failed', 'var(--error)');
+    }
   } catch(err) { btn.disabled=false; btn.textContent='Save'; console.error(err); toast('Save failed','var(--error)'); }
 }
 
 /* Events */
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelector('#q').addEventListener('input', d(e=>{ FILTER.q=e.target.value; renderTable(); },180));
-  document.querySelector('#refreshBtn').addEventListener('click', ()=>refreshData());
+  const qEl = document.querySelector('#q'); if(qEl) qEl.addEventListener('input', d(e=>{ FILTER.q=e.target.value; renderTable(); },180));
+  const rBtn = document.querySelector('#refreshBtn'); if(rBtn) rBtn.addEventListener('click', ()=>refreshData());
   refreshData();
-  REFRESH_TIMER = setInterval(refreshData, 60000);
 });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshData(); });
 const d = (fn, wait)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; };
