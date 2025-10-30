@@ -1,1 +1,37 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Recruit 101 Dashboard</title><link rel="stylesheet" href="styles.css"></head><body><header class="appbar"><div class="appbar-inner"><div class="logo"><div class="title">Recruit 101 — Dashboard</div></div><div class="spacer"></div><div class="pill" id="syncState">Syncing…</div></div></header><main class="wrap"><div id="tabs" class="tabs"></div><section class="toolbar"><div class="field">🔎 <input id="q" type="text" placeholder="Search name, agency, phone, notes…"/></div><button class="btn" id="refreshBtn">Refresh</button><span class="muted" id="lastUpdated"></span></section><section class="table"><table><thead><tr><th>Message Type</th><th>Status</th><th>WhatsApp</th><th>Name</th><th>Surname</th><th>Number</th><th>Agency</th><th>Notes</th><th>Last Contact</th><th>Save</th></tr></thead><tbody id="tbody"><tr><td colspan="10">Loading…</td></tr></tbody></table></section></main><div class="toast" id="toast">Saved</div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Recruit 101 — Status Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Recruit 101 — Status Board</h1>
+    <div class="header-actions">
+      <input id="searchInput" class="input" type="search" placeholder="Filter rows…" />
+      <button id="refreshBtn" class="btn">Refresh</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="notice" class="notice" hidden></div>
+    <div id="loading" class="loading">Loading…</div>
+    <div id="tableWrap" class="table-wrap" hidden></div>
+  </main>
+
+  <footer class="app-footer">
+    <small>
+      Front-end v1.0 — saves status to your Google Apps Script backend and re-syncs.
+      Configure your endpoint in <code>config.js</code>.
+    </small>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

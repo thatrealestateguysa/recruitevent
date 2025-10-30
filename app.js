@@ -1,121 +1,291 @@
+(function () {
+  const cfg = window.APP_CONFIG || {};
+  const API = cfg.API_BASE;
+  const EXTRA = cfg.EXTRA_PARAMS || {};
+  const STATUS_HEADER_NAME = (cfg.STATUS_HEADER_NAME || "Status").toLowerCase();
+  const KNOWN_STATUSES = Array.isArray(cfg.KNOWN_STATUSES) && cfg.KNOWN_STATUSES.length
+    ? cfg.KNOWN_STATUSES : ["New", "In Progress", "On Hold", "Done"];
 
-const BASE_URL = "https://script.google.com/macros/s/AKfycbwuIEPRJh3RREanIasnQPTsg5EzKsj6aRANSDbCOa-mvGv4a1TxhFZH0UVsb7v00exIbw/exec";
-let ALL = { stats: {}, contacts: [], statusOptions: [] };
-let FILTER = { q:'', status:'' };
+  // Elements
+  const noticeEl = document.getElementById("notice");
+  const loadingEl = document.getElementById("loading");
+  const tableWrap = document.getElementById("tableWrap");
+  const refreshBtn = document.getElementById("refreshBtn");
+  const searchInput = document.getElementById("searchInput");
 
-const $ = (q, all=false) => all ? Array.from(document.querySelectorAll(q)) : document.querySelector(q);
-const nowFmt = () => new Date().toLocaleString('en-ZA');
-const fmt = n => Intl.NumberFormat('en-ZA').format(n);
-const cacheBust = () => '&t=' + Date.now();
+  // State
+  let rows = [];           // Array of objects
+  let headers = [];        // Array of header strings
+  let statusKey = "status";// resolved status column key
+  let idKey = "id";        // resolved id column key (fallbacks to "rowIndex")
+  let rowIndexKey = "rowIndex";
 
-function toast(msg, color){ const t=$('#toast'); t.textContent=msg||'Saved'; t.style.background=color||'var(--success)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1400); }
-function setSyncState(text){ $('#syncState').textContent = text; }
+  // Utils
+  const showNotice = (msg, isError=false) => {
+    noticeEl.textContent = msg;
+    noticeEl.hidden = false;
+    noticeEl.classList.toggle("error", isError);
+    setTimeout(() => (noticeEl.hidden = true), 4000);
+  };
+  const showLoading = (show) => {
+    loadingEl.style.display = show ? "block" : "none";
+  };
 
-function render(){ renderTabs(); renderTable(); }
+  const encodeParams = (obj) =>
+    new URLSearchParams(Object.entries(obj).reduce((acc, [k, v]) => {
+      acc[k] = typeof v === "object" ? JSON.stringify(v) : (v ?? "");
+      return acc;
+    }, {}));
 
-function renderTabs(){
-  const s = ALL.stats || {};
-  const container = $('#tabs');
-  const order = ['All','To Contact','Whatsapp','Reply','Keen to meet','Cultivate','Invite to events','Event Invite Sent','Event Invite Accepted','Referred','No Whatsapp','Not interested','Unsubscribe'];
-  container.innerHTML = order.map(label => {
-    const key = label === 'All' ? 'total' : label;
-    const count = s[key] || 0;
-    const active = (label === 'All' && !FILTER.status) || (FILTER.status === label);
-    return `<button class="tab ${active?'active':''}" data-status="${label==='All'?'':label}">${label} <span class="count">${fmt(count)}</span></button>`;
-  }).join('');
-  container.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', e => { FILTER.status = e.currentTarget.dataset.status || ''; $('#q').value=''; FILTER.q=''; renderTable(); }));
-}
+  // Robust fetch JSON with graceful fallbacks (GET ?action=list or POST {action:"list"})
+  async function apiList() {
+    const withExtra = { ...EXTRA, action: "list" };
+    // Try GET first
+    let url = API;
+    const sep = API.includes("?") ? "&" : "?";
+    url += sep + encodeParams(withExtra).toString();
 
-function contactMatches(c){
-  const q = (FILTER.q||'').toLowerCase();
-  const hit = !q || [c.name,c.surname,c.agency,c.cell,c.notes].some(x => String(x||'').toLowerCase().includes(q));
-  const byStatus = !FILTER.status || c.status === FILTER.status;
-  return hit && byStatus;
-}
-
-function renderTable(){
-  const rows = (ALL.contacts||[]).filter(contactMatches);
-  const tbody = $('#tbody');
-  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="10" class="muted" style="padding:16px">No results.</td></tr>`; return; }
-  tbody.innerHTML = rows.map(c => `
-    <tr data-row="${c.rowNumber}">
-      <td>${esc(c.messageType||'')}</td>
-      <td><select class="status">${optionize(ALL.statusOptions, c.status)}</select></td>
-      <td class="nowrap">${renderWaButtons(c)}</td>
-      <td class="nowrap"><strong>${esc(c.name||'')}</strong></td>
-      <td class="nowrap">${esc(c.surname||'')}</td>
-      <td class="nowrap">${esc(c.cell||'')}</td>
-      <td>${esc(c.agency||'')}</td>
-      <td><textarea class="notes" placeholder="Add notes…">${esc(c.notes||'')}</textarea></td>
-      <td class="nowrap">${esc(c.lastContact||'')}</td>
-      <td class="nowrap"><button class="btn" onclick="saveRow(${c.rowNumber}, this)">Save</button></td>
-    </tr>
-  `).join('');
-}
-
-function renderWaButtons(c){
-  const intl = c.intlPhone || '';
-  const msg = encodeURIComponent(c.waMsg || '');
-  const desktop = intl ? `whatsapp://send?phone=${intl}&text=${msg}` : '';
-  const web = c.waLink || (intl ? `https://web.whatsapp.com/send?phone=${intl}&text=${msg}` : '');
-  if(!intl && !web) return `<span class="muted">—</span>`;
-  return `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-      ${desktop?`<a class="link" href="${desktop}" onclick="setTimeout(()=>window.open('${web}','_blank'),600)">Open</a>`:''}
-      ${(!desktop&&web)?`<a class="link" href="${web}" target="_blank" rel="noopener">Open</a>`:''}
-    </div>`;
-}
-
-function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]); }
-function optionize(list, selected){ return (list||[]).map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join(''); }
-
-/* REST I/O with cache-buster */
-async function refreshData(){
-  setSyncState('Syncing…');
-  try {
-    const res = await fetch(BASE_URL + '?action=getDashboardData' + cacheBust(), { method:'GET', cache:'no-store' });
-    const payload = await res.json();
-    ALL = payload || { stats: {}, contacts: [], statusOptions: [] };
-    render();
-    const lu = document.getElementById('lastUpdated'); if(lu) lu.textContent = 'Updated ' + nowFmt();
-    setSyncState('Up to date');
-  } catch(err) {
-    console.error(err); setSyncState('Sync failed'); toast('Sync failed','var(--error)');
-  }
-}
-
-async function saveRow(rowNumber, btn){
-  const tr = document.querySelector(`tr[data-row="${rowNumber}"]`);
-  if(!tr) return;
-  const newStatus = tr.querySelector('select.status').value;
-  const newNotes  = tr.querySelector('textarea.notes').value;
-
-  const item = (ALL.contacts||[]).find(x => x.rowNumber === rowNumber);
-  if(item) item.status = newStatus;
-
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try {
-    const url = BASE_URL + '?action=updateContactStatus' + cacheBust()
-      + '&rowNumber=' + encodeURIComponent(rowNumber)
-      + '&newStatus=' + encodeURIComponent(newStatus)
-      + '&newNotes=' + encodeURIComponent(newNotes);
-    const res = await fetch(url, { method:'GET' });
-    const data = await res.json();
-    btn.disabled = false; btn.textContent = 'Save';
-    if(data && data.success){
-      if (item && data.savedStatus) { item.status = data.savedStatus; tr.querySelector('select.status').value = data.savedStatus; }
-      toast('Saved'); refreshData();
-    } else {
-      toast(data && data.message ? data.message : 'Save failed', 'var(--error)');
-      refreshData();
+    try {
+      const res = await fetch(url, { method: "GET", mode: "cors" });
+      const data = await res.json();
+      return data;
+    } catch (e) {
+      // Retry POST JSON
+      const res = await fetch(API, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(withExtra),
+      });
+      try {
+        const data = await res.json();
+        return data;
+      } catch {
+        const txt = await res.text();
+        throw new Error("Unexpected response: " + txt.slice(0, 200));
+      }
     }
-  } catch(err) { btn.disabled=false; btn.textContent='Save'; console.error(err); toast('Save failed','var(--error)'); }
-}
+  }
 
-/* Events */
-document.addEventListener('DOMContentLoaded', () => {
-  const qEl = document.querySelector('#q'); if(qEl) qEl.addEventListener('input', d(e=>{ FILTER.q=e.target.value; renderTable(); },180));
-  const rBtn = document.querySelector('#refreshBtn'); if(rBtn) rBtn.addEventListener('click', ()=>refreshData());
-  refreshData();
-});
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshData(); });
-const d = (fn, wait)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; };
+  // Robust update call (POST preferred; falls back to form POST or GET)
+  async function apiUpdate(payload) {
+    const body = { ...EXTRA, action: "update", ...payload };
+    // POST JSON first
+    try {
+      const res = await fetch(API, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(async () => ({ text: await res.text() }));
+      if (!res.ok) throw new Error(typeof data === "string" ? data : (data.error || "Update failed"));
+      return data;
+    } catch (e1) {
+      // Try x-www-form-urlencoded
+      try {
+        const res = await fetch(API, {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: encodeParams(body),
+        });
+        const data = await res.json().catch(async () => ({ text: await res.text() }));
+        if (!res.ok) throw new Error(typeof data === "string" ? data : (data.error || "Update failed"));
+        return data;
+      } catch (e2) {
+        // Try GET as a last resort
+        const sep = API.includes("?") ? "&" : "?";
+        const url = API + sep + encodeParams(body).toString();
+        const res = await fetch(url, { method: "GET", mode: "cors" });
+        if (!res.ok) throw new Error("Update failed: " + res.status);
+        const data = await res.json().catch(async () => ({ text: await res.text() }));
+        return data;
+      }
+    }
+  }
+
+  // Normalize various possible responses into [{}, {}, ...] object rows + headers
+  function normalizeListResponse(raw) {
+    // Accept either {data:[...]} or [...]
+    const data = Array.isArray(raw) ? raw : (raw && raw.data) ? raw.data : [];
+    if (!Array.isArray(data)) throw new Error("Bad data format");
+
+    // Case 1: array of objects
+    if (data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
+      const hdrs = Object.keys(data[0]);
+      return { rows: data, headers: hdrs };
+    }
+
+    // Case 2: 2D array with first row headers
+    if (data.length && Array.isArray(data[0])) {
+      const hdrs = (data[0] || []).map(String);
+      const objects = data.slice(1).map((arr, idx) => {
+        const obj = {};
+        hdrs.forEach((h, i) => (obj[h] = arr[i]));
+        // Provide a default rowIndex starting from 2 (header is row 1 in Sheets)
+        obj.rowIndex = (idx + 2);
+        return obj;
+      });
+      return { rows: objects, headers: hdrs };
+    }
+
+    // Fallback: empty set
+    return { rows: [], headers: [] };
+  }
+
+  function resolveKeys(hdrs) {
+    // status
+    const statusK = hdrs.find(h => String(h).toLowerCase() === STATUS_HEADER_NAME)
+      || hdrs.find(h => /status/i.test(String(h)))
+      || "status";
+    // id
+    const idK = hdrs.find(h => /^id$/i.test(String(h)))
+      || hdrs.find(h => /(candidate.?id|record.?id|uid|key)/i.test(String(h)))
+      || "id";
+    return { statusK, idK };
+  }
+
+  function renderTable() {
+    if (!headers.length) {
+      tableWrap.innerHTML = "<div class='loading'>No data.</div>";
+      tableWrap.hidden = false;
+      return;
+    }
+
+    const q = (searchInput.value || "").toLowerCase().trim();
+    const filtered = q
+      ? rows.filter(r => Object.values(r).some(v => String(v ?? "").toLowerCase().includes(q)))
+      : rows;
+
+    const cols = headers; // show all headers
+    const headHtml = cols.map(h => `<th>${escapeHtml(h)}</th>`).join("") + "<th>Actions</th>";
+
+    const bodyHtml = filtered.map((r, idx) => {
+      const rid = r[idKey] ?? "";
+      const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? "";
+      const currentStatus = String(r[statusKey] ?? "").trim();
+
+      // Build status select
+      const uniqueStatuses = Array.from(new Set([currentStatus, ...KNOWN_STATUSES].filter(Boolean)));
+      const options = uniqueStatuses
+        .map(s => `<option value="${escapeAttr(s)}"${s === currentStatus ? " selected" : ""}>${escapeHtml(s)}</option>`)
+        .join("");
+      const statusCell = `
+        <select class="status" data-rid="${escapeAttr(rid)}" data-rowindex="${escapeAttr(rowIndexV)}">
+          ${options}
+        </select>
+      `;
+
+      const tds = cols.map(h => {
+        const key = String(h);
+        if (String(h).toLowerCase() === statusKey.toLowerCase()) {
+          return `<td>${statusCell}</td>`;
+        }
+        const v = r[key];
+        return `<td>${escapeHtml(v)}</td>`;
+      }).join("");
+
+      return `
+        <tr data-i="${idx}">
+          ${tds}
+          <td class="row-actions">
+            <button class="save-btn" data-save="${idx}">Save</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    tableWrap.innerHTML = `
+      <table>
+        <thead><tr>${headHtml}</tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    `;
+    tableWrap.hidden = false;
+
+    // Attach events
+    tableWrap.querySelectorAll("button[data-save]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const idx = parseInt(e.currentTarget.getAttribute("data-save"), 10);
+        await onSave(idx, e.currentTarget);
+      });
+    });
+  }
+
+  function escapeHtml(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function escapeAttr(v) { return escapeHtml(v); }
+
+  async function onSave(rowIdx, btn) {
+    try {
+      btn.disabled = true;
+      const tr = tableWrap.querySelector(`tr[data-i="${rowIdx}"]`);
+      const select = tr.querySelector("select.status");
+      const newStatus = select.value;
+
+      // Determine the backing row
+      const r = rows[rowIdx];
+      const rid = r[idKey] ?? "";
+      const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? ""; // Sheets row #
+      const payload = {
+        id: rid,
+        [statusKey]: newStatus,
+        // Provide multiple hints so the backend can choose:
+        status: newStatus,
+        rowIndex: rowIndexV,
+        headers,
+      };
+
+      await apiUpdate(payload);
+      showNotice("Saved. Refreshing…");
+      await loadAndRender(); // Re-sync to avoid "resets on refresh"
+    } catch (err) {
+      console.error(err);
+      showNotice("Save failed: " + (err.message || err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function loadAndRender() {
+    showLoading(true);
+    tableWrap.hidden = true;
+    try {
+      const raw = await apiList();
+      const norm = normalizeListResponse(raw);
+      rows = norm.rows;
+      headers = norm.headers;
+
+      // Resolve keys based on headers
+      const { statusK, idK } = resolveKeys(headers);
+      statusKey = statusK;
+      idKey = idK;
+      rowIndexKey = "rowIndex";
+
+      renderTable();
+    } catch (err) {
+      console.error(err);
+      tableWrap.hidden = false;
+      tableWrap.innerHTML = `<div class="loading error">Load failed: ${escapeHtml(err.message || err)}</div>`;
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // Wire up
+  refreshBtn.addEventListener("click", loadAndRender);
+  searchInput.addEventListener("input", renderTable);
+
+  // Initial load
+  if (!API) {
+    tableWrap.innerHTML = "<div class='loading error'>Missing API_BASE in config.js</div>";
+    loadingEl.style.display = "none";
+  } else {
+    loadAndRender();
+  }
+})();
