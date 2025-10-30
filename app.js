@@ -5,6 +5,7 @@
   const STATUS_HEADER_NAME = (cfg.STATUS_HEADER_NAME || "Status").toLowerCase();
   const KNOWN_STATUSES = Array.isArray(cfg.KNOWN_STATUSES) && cfg.KNOWN_STATUSES.length
     ? cfg.KNOWN_STATUSES : ["New", "In Progress", "On Hold", "Done"];
+  const DEBUG_DEFAULT = !!cfg.DEBUG;
 
   // Elements
   const noticeEl = document.getElementById("notice");
@@ -12,6 +13,8 @@
   const tableWrap = document.getElementById("tableWrap");
   const refreshBtn = document.getElementById("refreshBtn");
   const searchInput = document.getElementById("searchInput");
+  const debugEl = document.getElementById("debug");
+  const toggleDebugBtn = document.getElementById("toggleDebug");
 
   // State
   let rows = [];           // Array of objects
@@ -19,6 +22,19 @@
   let statusKey = "status";// resolved status column key
   let idKey = "id";        // resolved id column key (fallbacks to "rowIndex")
   let rowIndexKey = "rowIndex";
+  let debugOn = DEBUG_DEFAULT;
+  let lastDiag = "";
+
+  const setDebug = (txt) => {
+    lastDiag = txt ?? lastDiag;
+    if (!debugOn) { debugEl.hidden = true; return; }
+    debugEl.hidden = false;
+    debugEl.textContent = lastDiag || "(no diagnostics yet)";
+  };
+  toggleDebugBtn.addEventListener("click", () => {
+    debugOn = !debugOn; setDebug();
+  });
+  setDebug();
 
   // Utils
   const showNotice = (msg, isError=false) => {
@@ -37,109 +53,184 @@
       return acc;
     }, {}));
 
-  // Robust fetch JSON with graceful fallbacks (GET ?action=list or POST {action:"list"})
+  // Try multiple "list" shapes: action=list, mode=list, get=list, or no query
   async function apiList() {
     const withExtra = { ...EXTRA, action: "list" };
-    // Try GET first
-    let url = API;
-    const sep = API.includes("?") ? "&" : "?";
-    url += sep + encodeParams(withExtra).toString();
+    const attempts = [
+      // GET with action=list
+      async () => {
+        const sep = API.includes("?") ? "&" : "?";
+        const url = API + sep + encodeParams(withExtra).toString();
+        const res = await fetch(url, { method: "GET" });
+        return await parseResponse(res, "GET?action=list", url);
+      },
+      // POST JSON {action:"list"}
+      async () => {
+        const res = await fetch(API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(withExtra),
+        });
+        return await parseResponse(res, "POST json {action:list}", API);
+      },
+      // POST form-encoded
+      async () => {
+        const res = await fetch(API, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: encodeParams(withExtra),
+        });
+        return await parseResponse(res, "POST form {action:list}", API);
+      },
+      // GET no query (some scripts decide by default)
+      async () => {
+        const res = await fetch(API, { method: "GET" });
+        return await parseResponse(res, "GET (no params)", API);
+      },
+      // GET with mode=list
+      async () => {
+        const sep = API.includes("?") ? "&" : "?";
+        const url = API + sep + "mode=list";
+        const res = await fetch(url, { method: "GET" });
+        return await parseResponse(res, "GET?mode=list", url);
+      },
+    ];
 
-    try {
-      const res = await fetch(url, { method: "GET", mode: "cors" });
-      const data = await res.json();
-      return data;
-    } catch (e) {
-      // Retry POST JSON
-      const res = await fetch(API, {
-        method: "POST",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(withExtra),
-      });
+    const errors = [];
+    for (const attempt of attempts) {
       try {
-        const data = await res.json();
-        return data;
-      } catch {
-        const txt = await res.text();
-        throw new Error("Unexpected response: " + txt.slice(0, 200));
+        const out = await attempt();
+        if (out != null) return out;
+      } catch (e) {
+        errors.push(String(e && e.message || e));
       }
+    }
+    throw new Error("All list attempts failed.\n" + errors.join("\n"));
+  }
+
+  async function parseResponse(res, label, url) {
+    const ct = res.headers.get("content-type") || "";
+    let bodyText = "";
+    let diagBase = `Request: ${label}\nURL: ${url}\nStatus: ${res.status}\nContent-Type: ${ct}`;
+    // Prefer JSON; if parse fails, capture text for diagnostics
+    try {
+      const data = await res.clone().json();
+      setDebug(diagBase + "\nParsed as JSON ✅");
+      return data;
+    } catch {
+      bodyText = await res.clone().text();
+      setDebug(diagBase + "\nParsed as TEXT ⚠️\nPreview: " + bodyText.slice(0, 400));
+      // Try to salvage JSON from text if it actually contains JSON
+      const maybe = bodyText.trim();
+      if (maybe.startsWith("{") || maybe.startsWith("[")) {
+        try {
+          return JSON.parse(maybe);
+        } catch { /* ignore */ }
+      }
+      // Not JSON; return null to try the next attempt
+      return null;
     }
   }
 
-  // Robust update call (POST preferred; falls back to form POST or GET)
+  // Robust update call — tries variants for maximum compatibility
   async function apiUpdate(payload) {
     const body = { ...EXTRA, action: "update", ...payload };
-    // POST JSON first
-    try {
-      const res = await fetch(API, {
-        method: "POST",
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(async () => ({ text: await res.text() }));
-      if (!res.ok) throw new Error(typeof data === "string" ? data : (data.error || "Update failed"));
-      return data;
-    } catch (e1) {
-      // Try x-www-form-urlencoded
-      try {
+
+    const attempts = [
+      async () => {
         const res = await fetch(API, {
           method: "POST",
-          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return await parseUpdateResponse(res, "POST json {action:update}");
+      },
+      async () => {
+        const res = await fetch(API, {
+          method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: encodeParams(body),
         });
-        const data = await res.json().catch(async () => ({ text: await res.text() }));
-        if (!res.ok) throw new Error(typeof data === "string" ? data : (data.error || "Update failed"));
-        return data;
-      } catch (e2) {
-        // Try GET as a last resort
+        return await parseUpdateResponse(res, "POST form {action:update}");
+      },
+      async () => {
         const sep = API.includes("?") ? "&" : "?";
         const url = API + sep + encodeParams(body).toString();
-        const res = await fetch(url, { method: "GET", mode: "cors" });
-        if (!res.ok) throw new Error("Update failed: " + res.status);
-        const data = await res.json().catch(async () => ({ text: await res.text() }));
-        return data;
+        const res = await fetch(url, { method: "GET" });
+        return await parseUpdateResponse(res, "GET with params (update)");
+      },
+    ];
+
+    const errors = [];
+    for (const attempt of attempts) {
+      try {
+        const out = await attempt();
+        if (out != null) return out;
+      } catch (e) {
+        errors.push(String(e && e.message || e));
       }
     }
+    throw new Error("All update attempts failed.\n" + errors.join("\n"));
   }
 
-  // Normalize various possible responses into [{}, {}, ...] object rows + headers
-  function normalizeListResponse(raw) {
-    // Accept either {data:[...]} or [...]
-    const data = Array.isArray(raw) ? raw : (raw && raw.data) ? raw.data : [];
-    if (!Array.isArray(data)) throw new Error("Bad data format");
+  async function parseUpdateResponse(res, label) {
+    const ct = res.headers.get("content-type") || "";
+    const okish = res.ok || (res.status >= 200 && res.status < 400);
+    let data = null;
+    try {
+      data = await res.clone().json();
+    } catch {
+      const txt = await res.clone().text();
+      setDebug(`[Update] ${label}\nStatus: ${res.status}\nCT: ${ct}\nText: ${txt.slice(0, 300)}`);
+      if (okish) return { ok: true, text: txt };
+      return null;
+    }
+    setDebug(`[Update] ${label}\nStatus: ${res.status}\nCT: ${ct}\nJSON: ok`);
+    return okish ? (data || { ok: true }) : null;
+  }
 
-    // Case 1: array of objects
-    if (data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
+  // Shape normalization
+  function normalizeListResponse(raw) {
+    // Accept common shapes
+    // 1) {data:[...]} or [ ... ]
+    let data = Array.isArray(raw) ? raw : raw && (raw.data || raw.rows || raw.values || raw.result || raw.items);
+    if (!data && raw && raw.sheetData && (raw.sheetData.rows || raw.sheetData.values)) {
+      data = raw.sheetData.rows || raw.sheetData.values;
+    }
+    if (!data) data = [];
+
+    // Array of objects
+    if (Array.isArray(data) && data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
       const hdrs = Object.keys(data[0]);
       return { rows: data, headers: hdrs };
     }
 
-    // Case 2: 2D array with first row headers
-    if (data.length && Array.isArray(data[0])) {
+    // 2D array with first row = headers
+    if (Array.isArray(data) && data.length && Array.isArray(data[0])) {
       const hdrs = (data[0] || []).map(String);
       const objects = data.slice(1).map((arr, idx) => {
         const obj = {};
         hdrs.forEach((h, i) => (obj[h] = arr[i]));
-        // Provide a default rowIndex starting from 2 (header is row 1 in Sheets)
-        obj.rowIndex = (idx + 2);
+        obj.rowIndex = (idx + 2); // include default sheet row index
         return obj;
       });
       return { rows: objects, headers: hdrs };
     }
 
-    // Fallback: empty set
+    // If it's a flat array of objects without explicit headers
+    if (Array.isArray(data) && data.length && typeof data[0] === "object") {
+      const hdrs = Object.keys(data[0]);
+      return { rows: data, headers: hdrs };
+    }
+
     return { rows: [], headers: [] };
   }
 
   function resolveKeys(hdrs) {
-    // status
-    const statusK = hdrs.find(h => String(h).toLowerCase() === STATUS_HEADER_NAME)
+    const lc = (s)=>String(s||"").toLowerCase();
+    const statusK = hdrs.find(h => lc(h) === STATUS_HEADER_NAME)
       || hdrs.find(h => /status/i.test(String(h)))
       || "status";
-    // id
     const idK = hdrs.find(h => /^id$/i.test(String(h)))
       || hdrs.find(h => /(candidate.?id|record.?id|uid|key)/i.test(String(h)))
       || "id";
@@ -231,13 +322,16 @@
       // Determine the backing row
       const r = rows[rowIdx];
       const rid = r[idKey] ?? "";
-      const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? ""; // Sheets row #
+      const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? "";
       const payload = {
         id: rid,
         [statusKey]: newStatus,
-        // Provide multiple hints so the backend can choose:
+        // Multiple hints so the backend can choose its preferred key:
         status: newStatus,
+        Status: newStatus,
+        STATUS: newStatus,
         rowIndex: rowIndexV,
+        row: rowIndexV,
         headers,
       };
 
@@ -261,7 +355,6 @@
       rows = norm.rows;
       headers = norm.headers;
 
-      // Resolve keys based on headers
       const { statusK, idK } = resolveKeys(headers);
       statusKey = statusK;
       idKey = idK;

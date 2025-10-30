@@ -67,6 +67,7 @@ h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
   border-radius: 10px;
   cursor: pointer;
 }
+.btn-mini { height: 28px; padding: 0 10px; font-size: 12px; margin-left: 10px; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .notice {
@@ -91,6 +92,18 @@ h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
   box-shadow: var(--shadow);
 }
 
+#debug {
+  margin-bottom: 12px;
+  background: #0d1117;
+  border: 1px dashed var(--ring);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: #cdd3db;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -110,16 +123,6 @@ tbody td {
   border-bottom: 1px solid var(--border);
 }
 tbody tr:hover { background: #0f1320; }
-
-.badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; padding: 3px 8px; border-radius: 999px;
-  border: 1px solid var(--ring);
-  background: #0c111b;
-}
-.badge.dot::before {
-  content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
-}
 
 select.status {
   background: #0e1016;

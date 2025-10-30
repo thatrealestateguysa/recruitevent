@@ -1,0 +1,8 @@
+
+# Netlify proxy to avoid CORS. Edit the `to` value to your Apps Script URL.
+[[redirects]]
+  from = "/api"
+  to = "https://script.google.com/macros/s/AKfycbw3htODYprb9WCj1qKeWA7xHNwi_5m7BY_ta7FQF0llaBcR15kQr6Ee7SXOIGZNE5yj9Q/exec"
+  status = 200
+  force = true
+  headers = { X-From-Proxy = "recruit101" }

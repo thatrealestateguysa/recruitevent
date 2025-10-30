@@ -1,48 +1,54 @@
-# Recruit 101 — Front-end
+# Recruit 101 — Front-end v1.1
 
-A tiny, robust front-end that **fetches your rows from Google Apps Script** and **updates status** without breaking your backend.
+A robust front-end that fetches rows from **Google Apps Script** and updates **Status** with an automatic re-sync. Includes **diagnostics** and an optional **Netlify proxy** to avoid CORS.
 
 ## Files
 
-- `index.html` — UI (open this in a browser).
-- `styles.css` — minimal dark theme.
-- `config.js` — set your Apps Script Web App URL here.
-- `app.js` — all logic: load → render → update → re-sync.
+- `index.html` — UI (dark, minimal) + a Diagnostics toggle.
+- `styles.css` — styling.
+- `config.js` — set `API_BASE` (proxy or direct) and options.
+- `app.js` — load → render → update → re-sync with multi-format support.
+- `netlify.toml` — proxy `/api` to your Apps Script URL (edit target).
+- `README.md` — this.
 
-## Setup (2 minutes)
+## 2-minute Setup (Netlify, recommended)
 
-1. **Edit `config.js`** and set `API_BASE` to your Apps Script Web App `/exec` URL.
-2. If your script expects extras (like a sheet name or key), add them under `EXTRA_PARAMS`.
-3. Open `index.html`. Click **Refresh** to pull data.
+1. Edit **`netlify.toml`** and set the `to = "https://script.google.com/macros/s/…/exec"` to **your** Apps Script URL.
+2. Leave `API_BASE` in **`config.js`** as `"/api"` (already set).
+3. Deploy the folder to Netlify (drag & drop or from a repo), then open the site.
+4. Click **Refresh** — you should see your rows. Change **Status**, hit **Save** → it re-syncs.
 
-### Expected Backend API (flexible)
+### Direct (no proxy)
 
-This UI tries the following automatically:
+If you must call Apps Script directly, set `API_BASE` in `config.js` to your `/exec` URL. Your Apps Script must return JSON and allow CORS. The app tries `GET ?action=list`, JSON `POST`, form `POST`, fallback `GET`, and `GET ?mode=list` — so it works with a lot of backends.
 
-- **List**:
-  - `GET  {API_BASE}?action=list&...` → returns either:
-    - `{ "data": [{obj}, ...] }` **or**
-    - `{ "data": [[...headers], [...row1], ...] }`
-  - (fallback) `POST JSON { "action": "list", ... }`
+## Expected Backend (flexible)
 
-- **Update** (status):
-  - `POST JSON { "action": "update", "id": "...", "rowIndex": 2, "status": "In Progress", "headers": [...] }`
-    (fallbacks to urlencoded POST or GET if needed)
+**List** — Any of these is fine:
+- `{ "data": [{obj}, ...] }` (array of objects)
+- `{ "rows": [{obj}, ...] }`
+- `{ "values": [[...headers], [...row1], ...] }` (2D array with headers in the first row)
+- or just `[ {obj}, ... ]`
 
-Return `200` on success (any JSON).
+**Update** — The app sends a POST (with fallbacks) including:
+```
+{ "action": "update",
+  "id": "...",
+  "rowIndex": 2,               // also sends "row"
+  "status": "In Progress",     // also sends "Status" and "STATUS"
+  "<StatusHeaderName>": "...",
+  "headers": [...] }
+```
+Return any JSON (HTTP 200) on success.
 
-> The app sends **both** `status` and `<StatusHeaderName>` keys, plus `rowIndex` and `id` so your script can choose what it prefers.
+## Diagnostics
+
+Click **Diagnostics** in the footer to see the last request method, URL, status, content-type, and a short preview of responses. This helps spot an HTML response (e.g., not deployed / not public) vs proper JSON.
 
 ## Tips
 
-- Deploy the Apps Script Web App with access: **Anyone with the link**.
-- Make sure CORS is allowed (Apps Script web apps allow it by default).
-- If your sheet’s status column isn’t called `Status`, set `STATUS_HEADER_NAME` in `config.js`.
-
-## Troubleshooting
-
-- **“resets on refresh”**: The app re-fetches after each save to stay in sync.
-- **Wrong columns**: The app auto-detects headers; it also works with a 2D array format.
-- **Still stuck?** Send me a sample of your list response (minus private data) so I can map exact fields.
+- In Apps Script, deploy the Web App with **"Anyone with the link"** access.
+- If your status column isn't literally "Status", set `STATUS_HEADER_NAME` in `config.js`.
+- If your backend uses a different param (e.g., `mode=list`), the app already tries it.
 
 Built: 2025-10-30.
