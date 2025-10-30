@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,34 +26,29 @@
     <!-- Toolbar -->
     <section class="toolbar">
       <div class="field">🔎 <input id="q" type="text" placeholder="Search name, agency, phone, notes…"/></div>
-      <div class="field">🏷️
-        <select id="statusFilter">
-          <option value="">All Statuses</option>
-        </select>
-      </div>
       <button class="btn ghost" id="refreshBtn">Refresh</button>
       <span class="muted" id="lastUpdated"></span>
     </section>
-
-    <!-- Stats -->
-    <section class="stats" id="stats"></section>
 
     <!-- Table -->
     <section class="table">
       <table>
         <thead>
           <tr>
-            <th class="nowrap">Name</th>
-            <th>Agency</th>
+            <th>Message Type</th>
             <th>Status</th>
+            <th>WhatsApp</th>
+            <th>Name</th>
+            <th>Surname</th>
+            <th>Number</th>
+            <th>Agency</th>
             <th>Notes</th>
             <th class="nowrap">Last Contact</th>
-            <th class="nowrap">WhatsApp</th>
             <th class="nowrap">Save</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="7">
+          <tr><td colspan="10">
             <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div> <span>Loading contacts…</span></div>
           </td></tr>
         </tbody>
