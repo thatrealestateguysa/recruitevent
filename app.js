@@ -1,166 +1,121 @@
 
-/* Minimal greyscale front-end with runtime that supports:
-   - Same-origin Apps Script (google.script.run) if available
-   - Cross-origin JSONP if not
-*/
-const STATUS_OPTIONS = ['New','Contacted','Interview','Offer','Hired','Rejected'];
-let DATA = [];
-const { BASE_URL } = window.APP_CONFIG || { BASE_URL: '' };
+const BASE_URL = "https://script.google.com/macros/s/AKfycbwuIEPRJh3RREanIasnQPTsg5EzKsj6aRANSDbCOa-mvGv4a1TxhFZH0UVsb7v00exIbw/exec";
+let ALL = { stats: {}, contacts: [], statusOptions: [] };
+let FILTER = { q:'', status:'' };
 
-function setStatus(message) {
-  document.getElementById('statusMsg').textContent = message || '';
+const $ = (q, all=false) => all ? Array.from(document.querySelectorAll(q)) : document.querySelector(q);
+const nowFmt = () => new Date().toLocaleString('en-ZA');
+const fmt = n => Intl.NumberFormat('en-ZA').format(n);
+const cacheBust = () => '&t=' + Date.now();
+
+function toast(msg, color){ const t=$('#toast'); t.textContent=msg||'Saved'; t.style.background=color||'var(--success)'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1400); }
+function setSyncState(text){ $('#syncState').textContent = text; }
+
+function render(){ renderTabs(); renderTable(); }
+
+function renderTabs(){
+  const s = ALL.stats || {};
+  const container = $('#tabs');
+  const order = ['All','To Contact','Whatsapp','Reply','Keen to meet','Cultivate','Invite to events','Event Invite Sent','Event Invite Accepted','Referred','No Whatsapp','Not interested','Unsubscribe'];
+  container.innerHTML = order.map(label => {
+    const key = label === 'All' ? 'total' : label;
+    const count = s[key] || 0;
+    const active = (label === 'All' && !FILTER.status) || (FILTER.status === label);
+    return `<button class="tab ${active?'active':''}" data-status="${label==='All'?'':label}">${label} <span class="count">${fmt(count)}</span></button>`;
+  }).join('');
+  container.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', e => { FILTER.status = e.currentTarget.dataset.status || ''; $('#q').value=''; FILTER.q=''; renderTable(); }));
 }
 
-function normalizeKeyMap(obj) {
-  const map = {};
-  Object.keys(obj).forEach(k => map[k.trim().toLowerCase().replace(/\s+/g,'')] = k);
-  return key => map[key.trim().toLowerCase().replace(/\s+/g,'')] || null;
+function contactMatches(c){
+  const q = (FILTER.q||'').toLowerCase();
+  const hit = !q || [c.name,c.surname,c.agency,c.cell,c.notes].some(x => String(x||'').toLowerCase().includes(q));
+  const byStatus = !FILTER.status || c.status === FILTER.status;
+  return hit && byStatus;
 }
 
-function toDateInputValue(val) {
-  if (!val) return '';
+function renderTable(){
+  const rows = (ALL.contacts||[]).filter(contactMatches);
+  const tbody = $('#tbody');
+  if(!rows.length){ tbody.innerHTML = `<tr><td colspan="10" class="muted" style="padding:16px">No results.</td></tr>`; return; }
+  tbody.innerHTML = rows.map(c => `
+    <tr data-row="${c.rowNumber}">
+      <td>${esc(c.messageType||'')}</td>
+      <td><select class="status">${optionize(ALL.statusOptions, c.status)}</select></td>
+      <td class="nowrap">${renderWaButtons(c)}</td>
+      <td class="nowrap"><strong>${esc(c.name||'')}</strong></td>
+      <td class="nowrap">${esc(c.surname||'')}</td>
+      <td class="nowrap">${esc(c.cell||'')}</td>
+      <td>${esc(c.agency||'')}</td>
+      <td><textarea class="notes" placeholder="Add notes…">${esc(c.notes||'')}</textarea></td>
+      <td class="nowrap">${esc(c.lastContact||'')}</td>
+      <td class="nowrap"><button class="btn" onclick="saveRow(${c.rowNumber}, this)">Save</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderWaButtons(c){
+  const intl = c.intlPhone || '';
+  const msg = encodeURIComponent(c.waMsg || '');
+  const desktop = intl ? `whatsapp://send?phone=${intl}&text=${msg}` : '';
+  const web = c.waLink || (intl ? `https://web.whatsapp.com/send?phone=${intl}&text=${msg}` : '');
+  if(!intl && !web) return `<span class="muted">—</span>`;
+  return `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+      ${desktop?`<a class="link" href="${desktop}" onclick="setTimeout(()=>window.open('${web}','_blank'),600)">Open</a>`:''}
+      ${(!desktop&&web)?`<a class="link" href="${web}" target="_blank" rel="noopener">Open</a>`:''}
+    </div>`;
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[m]); }
+function optionize(list, selected){ return (list||[]).map(v=>`<option value="${esc(v)}" ${v===selected?'selected':''}>${esc(v)}</option>`).join(''); }
+
+/* REST I/O with cache-buster */
+async function refreshData(){
+  setSyncState('Syncing…');
   try {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(val))) return String(val);
-    const d = new Date(val);
-    if (!isNaN(d)) {
-      const m = String(d.getMonth()+1).padStart(2,'0');
-      const day = String(d.getDate()).padStart(2,'0');
-      return `${d.getFullYear()}-${m}-${day}`;
-    }
-  } catch(_) {}
-  return '';
-}
-
-// ---------- Transport layer ----------
-function hasAppsScript() { return !!(window.google && google.script && google.script.run); }
-
-function runServer(methodName, payload) {
-  if (hasAppsScript()) {
-    return new Promise((resolve, reject) => {
-      google.script.run
-        .withSuccessHandler(resolve)
-        .withFailureHandler(err => reject(new Error(err && err.message ? err.message : String(err))))
-        [methodName](payload);
-    });
-  } else {
-    // JSONP fallback
-    if (!BASE_URL) return Promise.reject(new Error('No BASE_URL configured'));
-    const params = Object.assign({ action: methodName === 'getAll' ? 'list' : 'update' }, payload || {});
-    return jsonp(BASE_URL, params);
+    const res = await fetch(BASE_URL + '?action=getDashboardData' + cacheBust(), { method:'GET', cache:'no-store' });
+    const payload = await res.json();
+    ALL = payload || { stats: {}, contacts: [], statusOptions: [] };
+    render();
+    const lu = document.getElementById('lastUpdated'); if(lu) lu.textContent = 'Updated ' + nowFmt();
+    setSyncState('Up to date');
+  } catch(err) {
+    console.error(err); setSyncState('Sync failed'); toast('Sync failed','var(--error)');
   }
 }
 
-// JSONP helper
-function jsonp(url, params={}, timeoutMs=15000) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const q = new URLSearchParams(Object.assign({}, params, { callback: cb })).toString();
-    const src = url + (url.includes('?') ? '&' : '?') + q;
-    const script = document.createElement('script');
-    let done = false;
-    window[cb] = (data) => { if (done) return; done = true; cleanup(); resolve(data); };
-    function cleanup(){ delete window[cb]; if (script.parentNode) script.parentNode.removeChild(script); }
-    script.src = src;
-    script.onerror = () => { if (done) return; done = true; cleanup(); reject(new Error('Network error')); };
-    document.body.appendChild(script);
-    setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('Timeout')); }, timeoutMs);
-  });
-}
+async function saveRow(rowNumber, btn){
+  const tr = document.querySelector(`tr[data-row="${rowNumber}"]`);
+  if(!tr) return;
+  const newStatus = tr.querySelector('select.status').value;
+  const newNotes  = tr.querySelector('textarea.notes').value;
 
-// ---------- UI ----------
-function render(rows) {
-  const tbody = document.getElementById('rows');
-  tbody.innerHTML = '';
+  const item = (ALL.contacts||[]).find(x => x.rowNumber === rowNumber);
+  if(item) item.status = newStatus;
 
-  const statusSel = document.getElementById('statusFilter');
-  if (statusSel.children.length === 1) {
-    STATUS_OPTIONS.forEach(s => {
-      const o = document.createElement('option'); o.value = s; o.textContent = s; statusSel.appendChild(o);
-    });
-  }
-
-  rows.forEach(obj => {
-    const norm = normalizeKeyMap(obj);
-    const ID = obj[norm('id')] ?? '';
-    const NAME = obj[norm('name')] ?? obj[norm('candidate')] ?? '';
-    const ROLE = obj[norm('role')] ?? obj[norm('job')] ?? obj[norm('position')] ?? '';
-    const STATUS = obj[norm('status')] ?? '';
-    const BUDATE = obj[norm('budate')] ?? obj[norm('bu date')] ?? obj[norm('budate')] ?? '';
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${ID}</td>
-      <td>${NAME}</td>
-      <td>${ROLE}</td>
-      <td>
-        <select class="status-select" id="status-${ID}">
-          ${STATUS_OPTIONS.map(s => `<option value="${s}" ${String(STATUS).trim()===s?'selected':''}>${s}</option>`).join('')}
-        </select>
-      </td>
-      <td><input class="date-input" type="date" id="budate-${ID}" value="${toDateInputValue(BUDATE)}"></td>
-      <td><button class="btn" id="save-${ID}">Save</button></td>
-    `;
-    tbody.appendChild(tr);
-    tr.querySelector(`#save-${CSS.escape(String(ID))}`).addEventListener('click', () => save(ID));
-  });
-
-  filterRows();
-}
-
-function filterRows() {
-  const q = document.getElementById('search').value.trim().toLowerCase();
-  const status = document.getElementById('statusFilter').value;
-  const tbody = document.getElementById('rows');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  let shown = 0;
-  rows.forEach(tr => {
-    const tds = tr.querySelectorAll('td');
-    const text = Array.from(tds).slice(0,5).map(td => td.textContent.toLowerCase()).join(' ');
-    const statusVal = tr.querySelector('.status-select')?.value || '';
-    const match = (!q || text.includes(q)) && (!status || statusVal === status);
-    tr.style.display = match ? '' : 'none';
-    if (match) shown++;
-  });
-  setStatus(`Showing ${shown} of ${rows.length}`);
-}
-
-// ---------- Actions ----------
-async function refresh() {
+  btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    setStatus('Loading…');
-    const res = await runServer('getAll', {});
-    const rows = (res && (res.rows || res)) || [];
-    DATA = Array.isArray(rows) ? rows : [];
-    render(DATA);
-    setStatus(`Loaded ${DATA.length} records.`);
-  } catch (e) {
-    setStatus('Failed to load: ' + e.message);
-  }
-}
-
-async function save(id) {
-  const btn = document.getElementById(`save-${id}`);
-  const status = document.getElementById(`status-${id}`).value;
-  const budate = document.getElementById(`budate-${id}`).value;
-  try {
-    btn.disabled = true; btn.textContent = 'Saving…'; setStatus(`Updating #${id}…`);
-    const res = await runServer('updateStatus', { id, status, budate });
-    if (res && (res.ok || res.row)) {
-      setStatus(`Updated #${id}.`);
-      await refresh();
-    } else {
-      setStatus('Failed: ' + (res && res.error ? res.error : 'Unknown error'));
-      btn.disabled = false; btn.textContent = 'Save';
-    }
-  } catch (e) {
-    setStatus('Error: ' + e.message);
+    const url = BASE_URL + '?action=updateContactStatus' + cacheBust()
+      + '&rowNumber=' + encodeURIComponent(rowNumber)
+      + '&newStatus=' + encodeURIComponent(newStatus)
+      + '&newNotes=' + encodeURIComponent(newNotes);
+    const res = await fetch(url, { method:'GET' });
+    const data = await res.json();
     btn.disabled = false; btn.textContent = 'Save';
-  }
+    if(data && data.success){
+      if (item && data.savedStatus) { item.status = data.savedStatus; tr.querySelector('select.status').value = data.savedStatus; }
+      toast('Saved'); refreshData();
+    } else {
+      toast(data && data.message ? data.message : 'Save failed', 'var(--error)');
+      refreshData();
+    }
+  } catch(err) { btn.disabled=false; btn.textContent='Save'; console.error(err); toast('Save failed','var(--error)'); }
 }
 
+/* Events */
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('search').addEventListener('input', filterRows);
-  document.getElementById('statusFilter').addEventListener('change', filterRows);
-  document.getElementById('refresh').addEventListener('click', refresh);
-  refresh();
+  const qEl = document.querySelector('#q'); if(qEl) qEl.addEventListener('input', d(e=>{ FILTER.q=e.target.value; renderTable(); },180));
+  const rBtn = document.querySelector('#refreshBtn'); if(rBtn) rBtn.addEventListener('click', ()=>refreshData());
+  refreshData();
 });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshData(); });
+const d = (fn, wait)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; };
