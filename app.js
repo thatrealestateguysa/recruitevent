@@ -17,10 +17,10 @@
   const toggleDebugBtn = document.getElementById("toggleDebug");
 
   // State
-  let rows = [];           // Array of objects
-  let headers = [];        // Array of header strings
-  let statusKey = "status";// resolved status column key
-  let idKey = "id";        // resolved id column key (fallbacks to "rowIndex")
+  let rows = [];
+  let headers = [];
+  let statusKey = "status";
+  let idKey = "id";
   let rowIndexKey = "rowIndex";
   let debugOn = DEBUG_DEFAULT;
   let lastDiag = "";
@@ -41,7 +41,7 @@
     noticeEl.textContent = msg;
     noticeEl.hidden = false;
     noticeEl.classList.toggle("error", isError);
-    setTimeout(() => (noticeEl.hidden = true), 4000);
+    setTimeout(() => (noticeEl.hidden = true), 2500);
   };
   const showLoading = (show) => {
     loadingEl.style.display = show ? "block" : "none";
@@ -53,18 +53,19 @@
       return acc;
     }, {}));
 
-  // Try multiple "list" shapes: action=list, mode=list, get=list, or no query
+  function isUrl(v) {
+    try { return /^https?:\/\//i.test(String(v || "")); } catch { return false; }
+  }
+
   async function apiList() {
     const withExtra = { ...EXTRA, action: "list" };
     const attempts = [
-      // GET with action=list
       async () => {
         const sep = API.includes("?") ? "&" : "?";
         const url = API + sep + encodeParams(withExtra).toString();
         const res = await fetch(url, { method: "GET" });
         return await parseResponse(res, "GET?action=list", url);
       },
-      // POST JSON {action:"list"}
       async () => {
         const res = await fetch(API, {
           method: "POST",
@@ -73,7 +74,6 @@
         });
         return await parseResponse(res, "POST json {action:list}", API);
       },
-      // POST form-encoded
       async () => {
         const res = await fetch(API, {
           method: "POST",
@@ -82,12 +82,10 @@
         });
         return await parseResponse(res, "POST form {action:list}", API);
       },
-      // GET no query (some scripts decide by default)
       async () => {
         const res = await fetch(API, { method: "GET" });
         return await parseResponse(res, "GET (no params)", API);
       },
-      // GET with mode=list
       async () => {
         const sep = API.includes("?") ? "&" : "?";
         const url = API + sep + "mode=list";
@@ -112,7 +110,6 @@
     const ct = res.headers.get("content-type") || "";
     let bodyText = "";
     let diagBase = `Request: ${label}\nURL: ${url}\nStatus: ${res.status}\nContent-Type: ${ct}`;
-    // Prefer JSON; if parse fails, capture text for diagnostics
     try {
       const data = await res.clone().json();
       setDebug(diagBase + "\nParsed as JSON ✅");
@@ -120,22 +117,16 @@
     } catch {
       bodyText = await res.clone().text();
       setDebug(diagBase + "\nParsed as TEXT ⚠️\nPreview: " + bodyText.slice(0, 400));
-      // Try to salvage JSON from text if it actually contains JSON
       const maybe = bodyText.trim();
       if (maybe.startsWith("{") || maybe.startsWith("[")) {
-        try {
-          return JSON.parse(maybe);
-        } catch { /* ignore */ }
+        try { return JSON.parse(maybe); } catch {}
       }
-      // Not JSON; return null to try the next attempt
       return null;
     }
   }
 
-  // Robust update call — tries variants for maximum compatibility
   async function apiUpdate(payload) {
     const body = { ...EXTRA, action: "update", ...payload };
-
     const attempts = [
       async () => {
         const res = await fetch(API, {
@@ -189,35 +180,29 @@
     return okish ? (data || { ok: true }) : null;
   }
 
-  // Shape normalization
   function normalizeListResponse(raw) {
-    // Accept common shapes
-    // 1) {data:[...]} or [ ... ]
     let data = Array.isArray(raw) ? raw : raw && (raw.data || raw.rows || raw.values || raw.result || raw.items);
     if (!data && raw && raw.sheetData && (raw.sheetData.rows || raw.sheetData.values)) {
       data = raw.sheetData.rows || raw.sheetData.values;
     }
     if (!data) data = [];
 
-    // Array of objects
     if (Array.isArray(data) && data.length && typeof data[0] === "object" && !Array.isArray(data[0])) {
       const hdrs = Object.keys(data[0]);
       return { rows: data, headers: hdrs };
     }
 
-    // 2D array with first row = headers
     if (Array.isArray(data) && data.length && Array.isArray(data[0])) {
       const hdrs = (data[0] || []).map(String);
       const objects = data.slice(1).map((arr, idx) => {
         const obj = {};
         hdrs.forEach((h, i) => (obj[h] = arr[i]));
-        obj.rowIndex = (idx + 2); // include default sheet row index
+        obj.rowIndex = (idx + 2);
         return obj;
       });
       return { rows: objects, headers: hdrs };
     }
 
-    // If it's a flat array of objects without explicit headers
     if (Array.isArray(data) && data.length && typeof data[0] === "object") {
       const hdrs = Object.keys(data[0]);
       return { rows: data, headers: hdrs };
@@ -237,6 +222,23 @@
     return { statusK, idK };
   }
 
+  function renderWhatsAppCell(h, v) {
+    const isWAHeader = /whats\s*app|whatsapp|wa\s*link/i.test(String(h));
+    if (isWAHeader && isUrl(v)) {
+      const href = String(v);
+      return `<div class="btn-group">
+        <a class="btn btn-mini linkish" href="${href}" target="_blank" rel="noopener">Open WhatsApp</a>
+        <button class="btn btn-mini copy-btn" data-copy="${escapeAttr(href)}">Copy</button>
+      </div>`;
+    }
+    if (isUrl(v)) {
+      const href = String(v);
+      return `<a class="btn btn-mini linkish" href="${href}" target="_blank" rel="noopener">Open</a>`;
+    }
+    // Non-URL fallback
+    return `<div class="truncate">${escapeHtml(v)}</div>`;
+  }
+
   function renderTable() {
     if (!headers.length) {
       tableWrap.innerHTML = "<div class='loading'>No data.</div>";
@@ -249,42 +251,34 @@
       ? rows.filter(r => Object.values(r).some(v => String(v ?? "").toLowerCase().includes(q)))
       : rows;
 
-    const cols = headers; // show all headers
-    const headHtml = cols.map(h => `<th>${escapeHtml(h)}</th>`).join("") + "<th>Actions</th>";
+    const cols = headers;
+    const headHtml = cols.map(h => `<th>${escapeHtml(h)}</th>`).join("");
 
     const bodyHtml = filtered.map((r, idx) => {
       const rid = r[idKey] ?? "";
       const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? "";
       const currentStatus = String(r[statusKey] ?? "").trim();
 
-      // Build status select
       const uniqueStatuses = Array.from(new Set([currentStatus, ...KNOWN_STATUSES].filter(Boolean)));
       const options = uniqueStatuses
         .map(s => `<option value="${escapeAttr(s)}"${s === currentStatus ? " selected" : ""}>${escapeHtml(s)}</option>`)
         .join("");
-      const statusCell = `
-        <select class="status" data-rid="${escapeAttr(rid)}" data-rowindex="${escapeAttr(rowIndexV)}">
-          ${options}
-        </select>
-      `;
+      const statusCell = `<select class="status" data-rid="${escapeAttr(rid)}" data-rowindex="${escapeAttr(rowIndexV)}">${options}</select>`;
 
       const tds = cols.map(h => {
         const key = String(h);
+        const v = r[key];
         if (String(h).toLowerCase() === statusKey.toLowerCase()) {
           return `<td>${statusCell}</td>`;
         }
-        const v = r[key];
-        return `<td>${escapeHtml(v)}</td>`;
+        // Special render for WhatsApp/link columns
+        if (/whats\s*app|whatsapp|link/i.test(key)) {
+          return `<td>${renderWhatsAppCell(h, v)}</td>`;
+        }
+        return `<td><div class="truncate">${escapeHtml(v)}</div></td>`;
       }).join("");
 
-      return `
-        <tr data-i="${idx}">
-          ${tds}
-          <td class="row-actions">
-            <button class="save-btn" data-save="${idx}">Save</button>
-          </td>
-        </tr>
-      `;
+      return `<tr data-i="${idx}">${tds}</tr>`;
     }).join("");
 
     tableWrap.innerHTML = `
@@ -295,11 +289,29 @@
     `;
     tableWrap.hidden = false;
 
-    // Attach events
-    tableWrap.querySelectorAll("button[data-save]").forEach(btn => {
+    // Autosave on change
+    tableWrap.querySelectorAll("select.status").forEach(sel => {
+      sel.addEventListener("change", async (e) => {
+        const tr = e.target.closest("tr");
+        const idx = parseInt(tr.getAttribute("data-i"), 10);
+        await onSave(idx, e.target);
+      });
+    });
+
+    // Copy buttons
+    tableWrap.querySelectorAll(".copy-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
-        const idx = parseInt(e.currentTarget.getAttribute("data-save"), 10);
-        await onSave(idx, e.currentTarget);
+        const txt = e.currentTarget.getAttribute("data-copy") || "";
+        try {
+          await navigator.clipboard.writeText(txt);
+          showNotice("Link copied");
+        } catch {
+          // fallback
+          const ta = document.createElement("textarea");
+          ta.value = txt; document.body.appendChild(ta);
+          ta.select(); document.execCommand("copy"); ta.remove();
+          showNotice("Link copied");
+        }
       });
     });
   }
@@ -312,21 +324,19 @@
   }
   function escapeAttr(v) { return escapeHtml(v); }
 
-  async function onSave(rowIdx, btn) {
+  async function onSave(rowIdx, controlEl) {
     try {
-      btn.disabled = true;
+      controlEl.disabled = true;
       const tr = tableWrap.querySelector(`tr[data-i="${rowIdx}"]`);
       const select = tr.querySelector("select.status");
       const newStatus = select.value;
 
-      // Determine the backing row
       const r = rows[rowIdx];
       const rid = r[idKey] ?? "";
       const rowIndexV = r[rowIndexKey] ?? r.rowIndex ?? "";
       const payload = {
         id: rid,
         [statusKey]: newStatus,
-        // Multiple hints so the backend can choose its preferred key:
         status: newStatus,
         Status: newStatus,
         STATUS: newStatus,
@@ -336,13 +346,13 @@
       };
 
       await apiUpdate(payload);
-      showNotice("Saved. Refreshing…");
-      await loadAndRender(); // Re-sync to avoid "resets on refresh"
+      showNotice("Saved");
+      await loadAndRender(); // ensure front/back stay aligned
     } catch (err) {
       console.error(err);
       showNotice("Save failed: " + (err.message || err), true);
     } finally {
-      btn.disabled = false;
+      controlEl.disabled = false;
     }
   }
 
@@ -370,11 +380,9 @@
     }
   }
 
-  // Wire up
   refreshBtn.addEventListener("click", loadAndRender);
   searchInput.addEventListener("input", renderTable);
 
-  // Initial load
   if (!API) {
     tableWrap.innerHTML = "<div class='loading error'>Missing API_BASE in config.js</div>";
     loadingEl.style.display = "none";

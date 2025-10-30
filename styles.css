@@ -59,8 +59,8 @@ h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
 }
 
 .btn {
-  height: 38px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 12px;
   border: 1px solid var(--ring);
   background: linear-gradient(180deg, #1a1f2a, #111621);
   color: var(--text);
@@ -107,6 +107,7 @@ h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
 table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 thead th {
   text-align: left;
@@ -121,8 +122,13 @@ tbody td {
   font-size: 14px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 tbody tr:hover { background: #0f1320; }
+
+th:nth-child(1), td:nth-child(1) { width: 28%; }
+th:nth-child(2), td:nth-child(2) { width: 22%; }
+th:nth-child(3), td:nth-child(3) { width: 50%; }
 
 select.status {
   background: #0e1016;
@@ -133,19 +139,14 @@ select.status {
   padding: 0 8px;
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
+.truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-.save-btn {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--ring);
-  background: #0e131d;
-  color: var(--text);
-  cursor: pointer;
-}
-.save-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+.btn-group { display: inline-flex; gap: 8px; align-items: center; }
+.linkish { text-decoration: none; }
 
 .error {
   color: var(--danger);
