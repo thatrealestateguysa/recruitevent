@@ -1,13 +1,16 @@
 
-# Recruit 101 — Frontend (wired to GAS URL)
+# Recruit 101 — Static Front End (JSONP)
 
-**BASE_URL**
-```
-https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec
-```
+This is a **pure static** front end wired to your Apps Script backend using **JSONP**, so it works from any origin (no CORS config needed).
 
-The frontend uses REST-style GET endpoints:
-- `GET https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec?action=getDashboardData` → returns JSON payload with stats + contacts.
-- `GET https://script.google.com/macros/s/AKfycbzMBtSXNTotcNIK5wX2oFM5JuoNMoIZwY07LiOSdYZ2_vEo92KuA4fL5RXIzB-YA6_naw/exec?action=updateContactStatus&rowNumber=R&newStatus=...&newNotes=...` → updates a row, returns `{success:true}`.
+**Backend URL**  
+`https://script.google.com/macros/s/AKfycbw3htODYprb9WCj1qKeWA7xHNwi_5m7BY_ta7FQF0llaBcR15kQr6Ee7SXOIGZNE5yj9Q/exec`
 
-This avoids CORS preflights and works from any static host (GitHub Pages, Netlify, Vercel, etc.).
+## Files
+- `index.html` — UI (grey background, white text, tabs wrap)
+- `styles.css` — styles
+- `config.js` — set `BASE_URL` here
+- `app.js` — JSONP wiring, table rendering, search/filter, update
+
+## Run locally
+Just open `index.html` in a browser, or serve with any static server.

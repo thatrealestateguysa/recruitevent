@@ -1,4 +1,1 @@
-// CONFIG — Apps Script endpoint (built-in)
-window.APP_CONFIG = {
-  API_BASE: "https://script.google.com/macros/s/AKfycby1BllzYaw9v8hCZ8ycqrEFNhut9x2ag9kQovm5SRIw9WOo3ldXXFMEWEzhKvuHW6hd/exec"
-};
+window.APP_CONFIG = { BASE_URL: "https://script.google.com/macros/s/AKfycbw3htODYprb9WCj1qKeWA7xHNwi_5m7BY_ta7FQF0llaBcR15kQr6Ee7SXOIGZNE5yj9Q/exec" };
