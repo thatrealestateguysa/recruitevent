@@ -1,38 +1,56 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Recruit 101 — Status Board</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css" />
+  <title>Recruit 101</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <h1>Recruit 101 — Status Board</h1>
-    <div class="header-actions">
-      <input id="searchInput" class="input" type="search" placeholder="Filter rows…" />
-      <button id="refreshBtn" class="btn">Refresh</button>
-    </div>
-  </header>
+  <nav class="tabs">
+    <span class="tab active">Dashboard</span>
+    <span class="tab">Applicants</span>
+    <span class="tab">Jobs</span>
+    <span class="tab">Interviews</span>
+    <span class="tab">Offers</span>
+    <span class="tab">Placements</span>
+    <span class="tab">Reports</span>
+    <span class="tab">Settings</span>
+  </nav>
 
-  <main class="container">
-    <div id="notice" class="notice" hidden></div>
-    <div id="loading" class="loading">Loading…</div>
-    <div id="debug" class="debug" hidden></div>
-    <div id="tableWrap" class="table-wrap" hidden></div>
+  <main class="wrap">
+    <section class="card">
+      <div class="toolbar">
+        <input id="search" placeholder="Search by name, role, status…" />
+        <select id="statusFilter">
+          <option value="">All Statuses</option>
+        </select>
+        <button id="refresh" class="btn">Refresh</button>
+        <span id="statusMsg" class="msg"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Surname</th>
+              <th>Cell</th>
+              <th>Status</th>
+              <th>BuDate</th>
+              <th>WhatsApp</th>
+              <th>Save</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
-  <footer class="app-footer">
-    <small>
-      Front-end v1.2 — autosave Status + WhatsApp buttons. Config in <code>config.js</code>.
-      <button id="toggleDebug" class="btn btn-mini" title="Show/Hide diagnostics">Diagnostics</button>
-    </small>
-  </footer>
-
-  <script src="./config.js"></script>
-  <script src="./app.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

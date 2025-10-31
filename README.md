@@ -1,17 +1,18 @@
 
-# Recruit 101 — Front-end v1.2
+# Recruit 101 — Front-End (Final)
 
-Focused fixes based on your screenshot:
-- **Autosave** the Status on change (no Save buttons needed).
-- Render **WhatsApp link** as a clean **Open WhatsApp** button (+ Copy).
-- **Truncate** long text so rows stay compact.
-- Still supports multiple backend response shapes and update methods.
-- Diagnostics toggle stays for quick debugging.
+**Backend URL**  
+https://script.google.com/macros/s/AKfycbzUMvPLB58Q6ixXnLgVSkG2B-D8oBarloY68sPvnJMqUOATYdNSgMKdr2BZX3DN49359Q/exec
 
-## Netlify Proxy (recommended)
-- Keep `API_BASE` as `/api` in `config.js`.
-- Edit `netlify.toml` → set `to = "https://script.google.com/macros/s/…/exec"` to your Apps Script URL.
-- Deploy to Netlify.
+## How it works
+- Loads rows via `?action=list`.
+- Saves status + BuDate via `?action=update&id=...&status=...&budate=...`.
+- Works inside Apps Script (same-origin) **or** from any static host via **JSONP**.
 
-## Direct (no proxy)
-- Set `API_BASE` in `config.js` to your `/exec` URL, make sure your web app is deployed public and returns JSON.
+## Files
+- `index.html`  — grayscale UI; tabs wrap; no horizontal slider
+- `styles.css`  — neutral styling
+- `config.js`   — set `BASE_URL` here
+- `app.js`      — data wiring (list / update / WhatsApp link)
+
+Just unzip and open `index.html` or host these files anywhere.
